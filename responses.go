@@ -34,6 +34,12 @@ func responsesToChat(body map[string]any) map[string]any {
 		}
 	}
 	msgs := responsesInputToMessages(body["input"])
+	if len(msgs) == 0 {
+		// 容错回退：兼容直接在顶层传递 messages 字段的客户端
+		if rawMsgs, ok := body["messages"].([]any); ok && len(rawMsgs) > 0 {
+			msgs = cleanMessages(rawMsgs)
+		}
+	}
 	if instr, ok := body["instructions"].(string); ok && instr != "" {
 		msgs = append([]any{map[string]any{"role": "system", "content": instr}}, msgs...)
 	}
@@ -52,14 +58,24 @@ func responsesInputToMessages(input any) []any {
 	var msgs []any
 	switch v := input.(type) {
 	case string:
-		msgs = append(msgs, map[string]any{"role": "user", "content": v})
+		if strings.TrimSpace(v) != "" {
+			msgs = append(msgs, map[string]any{"role": "user", "content": v})
+		}
 	case []any:
 		for _, item := range v {
 			m, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}
-			switch m["type"] {
+
+			// 1. 如果带有 role 字段（如 Cherry Studio / 标准消息对象 {"role":"user","content":"..."}），直接识别为对话消息
+			if role, ok := m["role"].(string); ok && role != "" {
+				msgs = append(msgs, map[string]any{"role": role, "content": stringifyResponsesContent(m["content"])})
+				continue
+			}
+
+			t, _ := m["type"].(string)
+			switch t {
 			case "message":
 				role, _ := m["role"].(string)
 				if role == "" {
@@ -105,8 +121,20 @@ func responsesInputToMessages(input any) []any {
 					}
 				}
 				msgs = append(msgs, map[string]any{"role": "tool", "content": output, "tool_call_id": callID})
+			case "input_text", "text":
+				if txt, ok := m["text"].(string); ok && strings.TrimSpace(txt) != "" {
+					msgs = append(msgs, map[string]any{"role": "user", "content": txt})
+				}
 			case "reasoning":
 				// reasoning 输入项无法映射到 chat 输入，忽略
+			default:
+				// 兜底：若包含 content
+				if c := m["content"]; c != nil {
+					text := stringifyResponsesContent(c)
+					if text != "" {
+						msgs = append(msgs, map[string]any{"role": "user", "content": text})
+					}
+				}
 			}
 		}
 	}
@@ -120,8 +148,13 @@ func stringifyResponsesContent(content any) string {
 	case []any:
 		parts := []string{}
 		for _, block := range v {
-			if b, ok := block.(map[string]any); ok {
+			switch b := block.(type) {
+			case string:
+				parts = append(parts, b)
+			case map[string]any:
 				if t, ok := b["text"].(string); ok {
+					parts = append(parts, t)
+				} else if t, ok := b["input_text"].(string); ok {
 					parts = append(parts, t)
 				}
 			}
@@ -285,8 +318,24 @@ func (s *responsesSSEWriter) event(event string, data any) {
 // onUsage 在收到上游 usage 时回调（用于请求日志/账号统计）。
 func chatStreamToResponses(w http.ResponseWriter, upstream *http.Response, reqLog *RequestLog, acc *Account) {
 	s := newResponsesSSE(w)
-	s.event("response.created", map[string]any{"type": "response.created"})
-	s.event("response.in_progress", map[string]any{"type": "response.in_progress"})
+	if reqLog != nil && reqLog.Model != "" {
+		s.model = reqLog.Model
+	}
+	s.event("response.created", map[string]any{
+		"type": "response.created",
+		"response": map[string]any{
+			"id":         s.respID,
+			"object":     "response",
+			"created_at": time.Now().Unix(),
+			"status":     "in_progress",
+			"model":      s.model,
+			"output":     []any{},
+		},
+	})
+	s.event("response.in_progress", map[string]any{
+		"type":        "response.in_progress",
+		"response_id": s.respID,
+	})
 
 	textEmitted := false
 	var curCallID, curCallName string
@@ -352,6 +401,20 @@ func chatStreamToResponses(w http.ResponseWriter, upstream *http.Response, reqLo
 				"content": []any{map[string]any{"type": "output_text", "text": text, "annotations": []any{}}}},
 		})
 	}
+	var outputs []any
+	if textEmitted {
+		outputs = append(outputs, map[string]any{
+			"id":     s.msgID,
+			"type":   "message",
+			"role":   "assistant",
+			"status": "completed",
+			"content": []any{map[string]any{
+				"type":        "output_text",
+				"text":        outText.String(),
+				"annotations": []any{},
+			}},
+		})
+	}
 	if curCallEmitted {
 		args := curArgs.String()
 		s.event("response.function_call_arguments.done", map[string]any{
@@ -362,13 +425,26 @@ func chatStreamToResponses(w http.ResponseWriter, upstream *http.Response, reqLo
 			"item": map[string]any{"type": "function_call", "id": "fc_" + curCallName, "call_id": curCallID,
 				"name": curCallName, "arguments": args, "status": "completed"},
 		})
+		outputs = append(outputs, map[string]any{
+			"type":      "function_call",
+			"id":        "fc_" + curCallName,
+			"call_id":   curCallID,
+			"name":      curCallName,
+			"arguments": args,
+			"status":    "completed",
+		})
 	}
 	s.event("response.completed", map[string]any{
 		"type": "response.completed",
 		"response": map[string]any{
-			"id": s.respID, "object": "response", "created_at": time.Now().Unix(), "status": "completed",
-			"model": s.model, "output": []any{}, "output_text": outText.String(),
-			"usage": usageToResponses(latestUsage),
+			"id":          s.respID,
+			"object":      "response",
+			"created_at":  time.Now().Unix(),
+			"status":      "completed",
+			"model":       s.model,
+			"output":      outputs,
+			"output_text": outText.String(),
+			"usage":       usageToResponses(latestUsage),
 		},
 	})
 
@@ -398,12 +474,22 @@ func (s *responsesSSEWriter) emitDelta(delta map[string]any, textEmitted *bool, 
 		}
 		outText.WriteString(c)
 		s.event("response.output_text.delta", map[string]any{
-			"type": "response.output_text.delta", "item_id": s.msgID, "output_index": 0, "content_index": 0, "delta": c,
+			"type":          "response.output_text.delta",
+			"response_id":   s.respID,
+			"item_id":       s.msgID,
+			"output_index":  0,
+			"content_index": 0,
+			"delta":         c,
 		})
 	}
 	if r, ok := delta["reasoning_content"].(string); ok && r != "" {
 		s.event("response.reasoning_summary_text.delta", map[string]any{
-			"type": "response.reasoning_summary_text.delta", "item_id": s.msgID, "output_index": 0, "content_index": 0, "delta": r,
+			"type":          "response.reasoning_summary_text.delta",
+			"response_id":   s.respID,
+			"item_id":       s.msgID,
+			"output_index":  0,
+			"content_index": 0,
+			"delta":         r,
 		})
 	}
 	if tc, ok := delta["tool_calls"].([]any); ok {

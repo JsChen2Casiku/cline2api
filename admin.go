@@ -90,6 +90,7 @@ func registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/api/models/delete", auth(handleAdminModelDelete))
 	mux.HandleFunc("/admin/api/config", auth(handleAdminConfig))
 	mux.HandleFunc("/admin/api/config/update", auth(handleAdminUpdateConfig))
+	mux.HandleFunc("/admin/api/test-proxy", auth(handleAdminTestProxy))
 	mux.HandleFunc("/admin/api/password", auth(handleAdminPassword))
 	mux.HandleFunc("/admin/api/request-logs", auth(handleAdminRequestLogs))
 	mux.HandleFunc("/admin/api/open-external", auth(handleOpenExternal))
@@ -823,8 +824,9 @@ var (
 )
 
 type proxyConfigData struct {
-	Strategy string            `json:"strategy"`
-	Headers  map[string]string `json:"headers"`
+	Strategy   string            `json:"strategy"`
+	Headers    map[string]string `json:"headers"`
+	ClineProxy string            `json:"clineProxy,omitempty"`
 }
 
 func defaultProxyConfig() *proxyConfigData {
@@ -860,6 +862,11 @@ func loadProxyConfigFromDisk() *proxyConfigData {
 	default:
 		cfg.Strategy = "round_robin"
 	}
+	if cfg.ClineProxy != "" {
+		if err := setClineProxy(cfg.ClineProxy); err != nil {
+			log.Printf("init cline proxy failed: %v", err)
+		}
+	}
 	return cfg
 }
 
@@ -885,6 +892,7 @@ func setProxyConfig(c *proxyConfigData) {
 	defer proxyConfigMu.Unlock()
 	proxyConfig = c
 	saveProxyConfigLocked()
+	_ = setClineProxy(c.ClineProxy)
 }
 
 // GET /admin/api/keys
@@ -953,10 +961,11 @@ func handleAdminConfig(w http.ResponseWriter, r *http.Request) {
 		"headers":      cfg.Headers,
 		"localIPs":     detectLocalIPs(),
 		"hasPassword":  loadPool().AdminPasswordHash != "",
+		"clineProxy":   cfg.ClineProxy,
 	}})
 }
 
-// POST /admin/api/config  body: { strategy?, headers?, defaultModel?, host? }
+// POST /admin/api/config  body: { strategy?, headers?, defaultModel?, host?, clineProxy? }
 func handleAdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeAPI(w, http.StatusMethodNotAllowed, apiResponse{Error: tAPI(r, "method_not_allowed")})
@@ -974,6 +983,7 @@ func handleAdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		Headers      map[string]string `json:"headers"`
 		DefaultModel string            `json:"defaultModel"`
 		Host         string            `json:"host"`
+		ClineProxy   *string           `json:"clineProxy"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeAPI(w, http.StatusBadRequest, apiResponse{Error: tAPI(r, "invalid_json")})
@@ -1045,6 +1055,18 @@ func handleAdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		restarting = true
 	}
 
+	if req.ClineProxy != nil {
+		p := strings.TrimSpace(*req.ClineProxy)
+		if p != "" {
+			if _, err := buildTransportForProxy(p); err != nil {
+				writeAPI(w, http.StatusBadRequest, apiResponse{Error: "代理格式无效: " + err.Error()})
+				return
+			}
+		}
+		cfg.ClineProxy = p
+		changed = true
+	}
+
 	if changed {
 		setProxyConfig(cfg)
 	}
@@ -1065,7 +1087,52 @@ func handleAdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		"host":          listenHost,
 		"address":       fmt.Sprintf("%s:%d", effectiveAdminHost(listenHost), listenPort),
 		"restarting":    restarting,
+		"clineProxy":    cfg.ClineProxy,
 	}})
+}
+
+// POST /admin/api/test-proxy  body: { proxy, target? }
+func handleAdminTestProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeAPI(w, http.StatusMethodNotAllowed, apiResponse{Error: tAPI(r, "method_not_allowed")})
+		return
+	}
+	var req struct {
+		Proxy  string `json:"proxy"`
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPI(w, http.StatusBadRequest, apiResponse{Error: tAPI(r, "invalid_json")})
+		return
+	}
+	if strings.TrimSpace(req.Proxy) == "" {
+		writeAPI(w, http.StatusBadRequest, apiResponse{Error: "代理地址不能为空"})
+		return
+	}
+	latency, status, err := testProxyConnectivity(req.Proxy, req.Target)
+	if err != nil {
+		writeAPI(w, http.StatusOK, apiResponse{
+			Success: false,
+			Data: map[string]any{
+				"ok":      false,
+				"error":   err.Error(),
+				"latency": latency,
+				"status":  status,
+			},
+			Error: err.Error(),
+		})
+		return
+	}
+	msg := fmt.Sprintf("连接成功，延迟 %dms (状态码: %d)", latency, status)
+	writeAPI(w, http.StatusOK, apiResponse{
+		Success: true,
+		Data: map[string]any{
+			"ok":      true,
+			"latency": latency,
+			"status":  status,
+		},
+		Message: msg,
+	})
 }
 
 // GET /admin/api/models

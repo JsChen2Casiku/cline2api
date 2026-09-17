@@ -699,6 +699,24 @@ textarea{resize:vertical;min-height:88px;font-family:ui-monospace,'SF Mono','Cas
   </div>
 
   <div class="section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Cline 官方出口代理</div>
+    <div class="section-desc">发往 Cline 官方 API (api.cline.bot) 的请求出口代理。留空则直连或使用系统环境代理。支持 http / https / socks5 / socks5h，支持带用户名密码，如 <span class="mono">http://user:pass@127.0.0.1:7890</span> 或 <span class="mono">socks5://127.0.0.1:1080</span>。</div>
+    <div class="section-body">
+      <div class="form-row">
+        <div class="field" style="flex:1">
+          <label>代理地址 (URL)</label>
+          <input type="text" id="clineProxyInput" style="width:100%;font-family:ui-monospace,monospace;font-size:13px" placeholder="留空使用系统代理/直连，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+        </div>
+      </div>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:10px;align-items:center">
+        <button class="btn" id="btnTestClineProxy" onclick="testClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>测试连接</button>
+        <button class="btn btn-primary" onclick="saveClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存代理配置</button>
+        <span id="clineProxyStatus" style="font-size:13px;margin-left:6px"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
     <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>请求头配置（模拟 Cline CLI 发出）</div>
     <div class="section-desc">这些请求头会附加到所有转发给 Cline API 的请求中，以模拟官方客户端行为。</div>
     <div class="section-body">
@@ -1115,6 +1133,16 @@ const I18N = {
   '保存 opencode 配置': 'Save opencode Config',
   'opencode 配置已保存': 'OpenCode config saved',
   'opencode 出口代理': 'OpenCode Egress Proxies',
+  'Cline 官方出口代理': 'Cline Official Egress Proxy',
+  '发往 Cline 官方 API (api.cline.bot) 的请求出口代理。留空则直连或使用系统环境代理。支持 http / https / socks5 / socks5h，支持带用户名密码，如 ': 'Egress proxy for requests to Cline official API (api.cline.bot). Leave empty for direct connection or system environment proxy. Supports http / https / socks5 / socks5h with authentication, e.g. ',
+  '代理地址 (URL)': 'Proxy Address (URL)',
+  '留空使用系统代理/直连，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080': 'Leave empty for system proxy / direct, e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080',
+  '测试连接': 'Test Connection',
+  '保存代理配置': 'Save Proxy Config',
+  'Cline 出口代理已保存并即时生效': 'Cline egress proxy saved and effective immediately',
+  '已切换为系统代理/直连': 'Switched to system proxy / direct',
+  '已启用代理: ': 'Enabled proxy: ',
+  '正在探测连接 api.cline.bot...': 'Probing connection to api.cline.bot...',
   '发往 opencode 的请求可经代理池轮询出口；命中限流时冷却当前出口并自动跳过。支持 http / https / socks5 / socks5h，每行一个，如 ': 'Requests to opencode can egress through a rotating proxy pool; the current proxy is cooled down and skipped on rate limits. Supports http / https / socks5 / socks5h, one per line, e.g. ',
   '代理策略': 'Proxy strategy',
   '出口冷却状态': 'Egress cooldowns',
@@ -1795,7 +1823,7 @@ async function saveHeaders() {
 // ========== 模型列表 ==========
 let _cachedModels = [];
 let _modelSyncSeen = false;
-let _modelGroupOpen = {}; // 模型分组展开状态（跨刷新保持，付费组默认折叠）
+let _modelGroupOpen = {}; // 模型分组展开状态（跨刷新保持，默认全部展开）
 
 function isOcModel(m) { return m.source === 'zen' || m.provider === 'opencode'; }
 
@@ -1807,13 +1835,13 @@ function renderModelChip(m) {
   return '<span class="model-item">' + item + '</span>';
 }
 
-// 模型分组渲染：opencode / Cline 分类，付费模型默认折叠，点击组头展开
+// 模型分组渲染：opencode / Cline 分类，默认全部展开展示，点击组头可折叠/展开
 function renderModelGroups(models) {
   const groups = [
     { key: 'oc-free', label: 'opencode · 免费模型', filter: m => isOcModel(m) && m.cost === 'free', collapsed: false },
-    { key: 'oc-pass', label: 'opencode · 付费模型', filter: m => isOcModel(m) && m.cost !== 'free', collapsed: true },
+    { key: 'oc-pass', label: 'opencode · 付费模型', filter: m => isOcModel(m) && m.cost !== 'free', collapsed: false },
     { key: 'cl-free', label: 'Cline · 免费模型', filter: m => !isOcModel(m) && !m.custom && m.cost === 'free', collapsed: false },
-    { key: 'cl-pass', label: 'Cline · 付费模型', filter: m => !isOcModel(m) && !m.custom && m.cost !== 'free', collapsed: true },
+    { key: 'cl-pass', label: 'Cline · 付费模型', filter: m => !isOcModel(m) && !m.custom && m.cost !== 'free', collapsed: false },
     { key: 'custom', label: '用户自定义', filter: m => m.custom, collapsed: false },
   ];
   return groups.map(g => {
@@ -2065,6 +2093,10 @@ async function loadConfig() {
     const h = c.host || '';
     const safeHosts = ['', '127.0.0.1', 'localhost', '::1'];
     _('listenWarn').style.display = (safeHosts.indexOf(h) === -1) ? '' : 'none';
+    // Cline 出口代理
+    if (c.clineProxy !== undefined && _('clineProxyInput')) {
+      _('clineProxyInput').value = c.clineProxy || '';
+    }
     if (c.headers) {
       const tbody = _('headersTableBody');
       tbody.innerHTML = Object.entries(c.headers).map(([k, v]) =>
@@ -2076,6 +2108,41 @@ async function loadConfig() {
       ).join('');
     }
   } catch (e) { /* ignore */ }
+}
+
+async function testClineProxy() {
+  const proxy = (_('clineProxyInput').value || '').trim();
+  const st = _('clineProxyStatus');
+  st.style.color = 'var(--text2)';
+  st.textContent = t('正在探测连接 api.cline.bot...');
+  try {
+    const d = await api('POST', '/test-proxy', { proxy, target: 'https://api.cline.bot' });
+    if (d.data && d.data.ok) {
+      st.style.color = 'var(--green)';
+      st.textContent = '✓ ' + (d.message || t('连接成功'));
+    } else {
+      st.style.color = 'var(--red)';
+      st.textContent = '✕ ' + (d.error || (d.data && d.data.error) || t('连接失败'));
+    }
+  } catch (e) {
+    st.style.color = 'var(--red)';
+    st.textContent = '✕ ' + t('测试请求失败: ') + e.message;
+  }
+}
+
+async function saveClineProxy() {
+  const proxy = (_('clineProxyInput').value || '').trim();
+  const st = _('clineProxyStatus');
+  try {
+    await api('POST', '/config/update', { clineProxy: proxy });
+    toast(t('Cline 出口代理已保存并即时生效'), 'success');
+    st.style.color = 'var(--green)';
+    st.textContent = '✓ ' + (proxy ? t('已启用代理: ') + proxy : t('已切换为系统代理/直连'));
+    setTimeout(() => { if (st.textContent.startsWith('✓')) st.textContent = ''; }, 6000);
+    loadConfig();
+  } catch (e) {
+    toast(t('保存失败: ') + e.message, 'error');
+  }
 }
 
 // ========== 请求日志 ==========

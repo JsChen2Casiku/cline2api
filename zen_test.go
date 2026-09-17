@@ -464,3 +464,86 @@ func TestUsageToResponses(t *testing.T) {
 		t.Errorf("cached detail: %v", u)
 	}
 }
+
+func TestResponsesInputWithoutType(t *testing.T) {
+	// 针对 Cherry Studio / 标准 OpenAI 客户端可能省略 type: "message" 的情况
+	raw := map[string]any{
+		"model": "cline-free/deepseek-v4.1-flash",
+		"input": []any{
+			map[string]any{
+				"role":    "user",
+				"content": "最新知识库日期",
+			},
+		},
+	}
+	out := responsesToChat(raw)
+	msgs, ok := out["messages"].([]any)
+	if !ok || len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got: %v", out["messages"])
+	}
+	m := msgs[0].(map[string]any)
+	if m["role"] != "user" || m["content"] != "最新知识库日期" {
+		t.Errorf("extracted message mismatched: %v", m)
+	}
+}
+
+func TestResponsesFallbackTopLevelMessages(t *testing.T) {
+	// 针对客户端直接传递顶层 messages 字段的情况
+	raw := map[string]any{
+		"model": "gpt-4o",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hello world"},
+		},
+	}
+	out := responsesToChat(raw)
+	msgs, ok := out["messages"].([]any)
+	if !ok || len(msgs) != 1 {
+		t.Fatalf("expected fallback to messages, got: %v", out["messages"])
+	}
+	m := msgs[0].(map[string]any)
+	if m["content"] != "hello world" {
+		t.Errorf("fallback message content mismatched: %v", m)
+	}
+}
+
+func TestResponsesContentBlocks(t *testing.T) {
+	// input 内部 content 为 input_text 块数组
+	raw := map[string]any{
+		"model": "gpt-4o",
+		"input": []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "input_text", "text": "line1"},
+					map[string]any{"type": "text", "text": "line2"},
+				},
+			},
+		},
+	}
+	out := responsesToChat(raw)
+	msgs := out["messages"].([]any)
+	m := msgs[0].(map[string]any)
+	if m["content"] != "line1\nline2" {
+		t.Errorf("content blocks join: %v", m["content"])
+	}
+}
+
+func TestBuildTransportForProxy(t *testing.T) {
+	// 1. 空代理走默认
+	tr, err := buildTransportForProxy("")
+	if err != nil || tr == nil {
+		t.Fatalf("empty proxy should not error: %v", err)
+	}
+
+	// 2. HTTP 代理解析
+	trHttp, err := buildTransportForProxy("http://user:pass@127.0.0.1:8080")
+	if err != nil || trHttp == nil || trHttp.Proxy == nil {
+		t.Fatalf("http proxy parse failed: %v", err)
+	}
+
+	// 3. SOCKS5 代理解析
+	trSocks, err := buildTransportForProxy("socks5://user:pass@127.0.0.1:1080")
+	if err != nil || trSocks == nil || trSocks.DialContext == nil {
+		t.Fatalf("socks5 proxy parse failed: %v", err)
+	}
+}

@@ -16,13 +16,13 @@ Cline API 反向代理 · 多账号轮询 · 双协议兼容 · 桌面端
 
 ## 简介
 
-Cline2API 是 Cline API 的反向代理服务，支持多账号轮询、OpenAI 和 Anthropic Messages API 双协议、API Key 鉴权，内置中英文管理后台（自动跟随浏览器语言，可手动切换）。提供跨平台桌面端单文件应用（Windows / macOS / Linux），双击即用。
+Cline2API 是 Cline API 的反向代理服务，支持多账号轮询、OpenAI Chat / Anthropic Messages / OpenAI Responses 三协议、API Key 鉴权，内置中英文管理后台（自动跟随浏览器语言，可手动切换）。提供跨平台桌面端单文件应用（Windows / macOS / Linux），双击即用。
 
 **开发语言**：Go（后端 + 代理 + 桌面壳），HTML/CSS/JS（管理后台前端，内嵌于二进制）。
 
 ## 功能
 
-- **双协议兼容**：同时支持 `/v1/chat/completions`（OpenAI）和 `/v1/messages`（Anthropic Messages API）
+- **三协议兼容**：同时支持 `/v1/chat/completions`（OpenAI Chat）、`/v1/messages`（Anthropic Messages API）与 `/v1/responses`（OpenAI Responses API）
 - **多账号轮询**：自动在多个 Cline 账号间切换负载（`round_robin` / `fill` / `random` 策略）
 - **中英文管理后台**：浏览器访问 `/admin/` 管理账号、API Key、模型配置、请求头、代理设置；自动跟随浏览器语言，侧栏可手动切换
 - **动态模型同步**：启动时自动拉取 Cline 官方推荐模型接口（免费/订阅模型），模型变化时弹窗提示，也可在后台手动「从 Cline 同步模型」
