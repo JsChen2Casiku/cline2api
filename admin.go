@@ -852,9 +852,14 @@ const proxyConfigPath = ".cline-config.json"
 // 文件不存在或损坏时回退默认值。resolveDataPath 为纯函数，包级初始化安全。
 func loadProxyConfigFromDisk() *proxyConfigData {
 	cfg := defaultProxyConfig()
-	if data, err := os.ReadFile(resolveDataPath(proxyConfigPath)); err == nil {
+	p := resolveDataPath(proxyConfigPath)
+	if data, err := os.ReadFile(p); err == nil {
 		if err := json.Unmarshal(data, cfg); err != nil {
 			log.Printf("proxy config parse failed: %v", err)
+		}
+	} else if os.Getenv("DATA_DIR") != "" || os.Getenv("CLINE_DATA_DIR") != "" {
+		if data, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+			_ = os.WriteFile(p, data, 0600)
 		}
 	}
 	switch cfg.Strategy {

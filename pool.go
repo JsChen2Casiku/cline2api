@@ -24,6 +24,16 @@ func init() {
 // 找到则用该路径（兼容旧版本在项目根目录存储的文件）；
 // 都找不到则回退到 exe 目录（首次运行会在该位置创建）。
 func resolveDataPath(filename string) string {
+	// 0. 优先使用环境变量指定的持久化目录（容器化或自定义数据目录）
+	if dir := os.Getenv("DATA_DIR"); dir != "" {
+		_ = os.MkdirAll(dir, 0755)
+		return filepath.Join(dir, filename)
+	}
+	if dir := os.Getenv("CLINE_DATA_DIR"); dir != "" {
+		_ = os.MkdirAll(dir, 0755)
+		return filepath.Join(dir, filename)
+	}
+
 	// 1. exe 所在目录
 	if exe, err := os.Executable(); err == nil {
 		p := filepath.Join(filepath.Dir(exe), filename)
@@ -64,6 +74,9 @@ func loadPool() *AccountPool {
 	data, err := os.ReadFile(poolPath)
 	if err != nil {
 		pool = &AccountPool{Accounts: []*Account{}, Keys: []string{}, Models: []Model{}}
+		if os.Getenv("DATA_DIR") != "" || os.Getenv("CLINE_DATA_DIR") != "" {
+			savePool()
+		}
 		return pool
 	}
 

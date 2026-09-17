@@ -1,13 +1,17 @@
 services:
   cline-proxy:
-    build: .
+    image: 2casiku/cline2api:latest
     container_name: cline-proxy
     restart: unless-stopped
     ports:
       - "3457:3457"
     volumes:
-      - ./.cline-accounts.json:/app/.cline-accounts.json
-      - ./override.md:/app/override.md:ro
+      # 方式一（推荐）：整目录挂载，自动持久化所有配置与账号，宿主机无需预先创建文件
+      - ./data:/app/data
+      # 方式二：单文件挂载（注意：启动前宿主机必须已存在对应文件，否则会被 Docker 自动创建为文件夹）
+      # - ./.cline-accounts.json:/app/.cline-accounts.json
+      # - ./override.md:/app/override.md:ro
     environment:
       - PORT=3457
       - CLINE_PROXY_HOST=0.0.0.0
+      - DATA_DIR=/app/data
