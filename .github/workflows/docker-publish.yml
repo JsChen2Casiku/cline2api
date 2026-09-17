@@ -51,8 +51,8 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ inputs.custom_tag }},enable=${{ inputs.custom_tag != '' }}
+            type=raw,value=latest
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
-            type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
             type=sha,prefix=dev-,enable=${{ github.ref == 'refs/heads/dev' }}
             type=semver,pattern={{version}}
