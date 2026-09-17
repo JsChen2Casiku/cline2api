@@ -4,10 +4,12 @@
 .cline-zen.json
 .cline-config.json
 cline-proxy
+cline-proxy-*
 cline-proxy.exe
 cline-proxy.exe~
 cline-go-proxy.exe
 .zcode/
+.idea/
 
 # 参考项目（opencode 集成参考，非本仓库代码）
 opencode-ref/
