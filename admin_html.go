@@ -6,6 +6,8 @@ const adminHTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cline 代理管理面板</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23007aff'/%3E%3Cstop offset='100%25' stop-color='%235856d6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3Cpath d='M17 5L7 17h8l-1 10 11-13h-8l1-7z' fill='%23ffffff' stroke='%23ffffff' stroke-width='0.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="alternate icon" href="/favicon.ico">
 <style>
 :root{
   --bg:#f5f5f7;--surface:#ffffff;--surface2:#fbfbfd;

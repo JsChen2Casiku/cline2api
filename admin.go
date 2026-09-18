@@ -54,9 +54,18 @@ var (
 const (
 	adminSessionCookie = "cline_admin_session"
 	adminSessionTTL    = 24 * time.Hour
+	appFaviconSVG      = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#007aff"/><stop offset="100%" stop-color="#5856d6"/></linearGradient></defs><rect width="32" height="32" rx="7" fill="url(#g)"/><path d="M17 5L7 17h8l-1 10 11-13h-8l1-7z" fill="#ffffff" stroke="#ffffff" stroke-width="0.5" stroke-linejoin="round"/></svg>`
 )
 
 func registerAdminRoutes(mux *http.ServeMux) {
+	faviconHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write([]byte(appFaviconSVG))
+	}
+	mux.HandleFunc("/favicon.ico", faviconHandler)
+	mux.HandleFunc("/admin/favicon.ico", faviconHandler)
+
 	mux.HandleFunc("/admin/", adminStaticHandler)
 	// 无需登录的接口
 	mux.HandleFunc("/admin/api/login", corsHandler(handleAdminLogin))
