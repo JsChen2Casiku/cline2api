@@ -624,6 +624,18 @@ textarea{resize:vertical;min-height:88px;font-family:ui-monospace,'SF Mono','Cas
       <div class="form-row">
         <div class="field"><label>账号文件</label><input type="text" id="settingPoolPath" disabled></div>
       </div>
+      <div class="form-row">
+        <div class="field" style="flex:1">
+          <label>Cline 官方出口代理</label>
+          <input type="text" id="clineProxyInput" style="width:100%;font-family:ui-monospace,monospace;font-size:13px" placeholder="留空使用系统代理/直连，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">发往 Cline 官方 API (api.cline.bot) 的请求出口代理。支持 http / https / socks5 / socks5h，支持带用户名密码。</div>
+        </div>
+      </div>
+      <div class="form-actions" style="margin-top:10px;display:flex;gap:10px;align-items:center">
+        <button class="btn" id="btnTestClineProxy" onclick="testClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>测试连接</button>
+        <button class="btn btn-primary" onclick="saveClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存代理配置</button>
+        <span id="clineProxyStatus" style="font-size:13px;margin-left:6px"></span>
+      </div>
     </div>
   </div>
 
@@ -694,24 +706,6 @@ textarea{resize:vertical;min-height:88px;font-family:ui-monospace,'SF Mono','Cas
       <div class="field" style="margin-top:10px">
         <label>代理列表</label>
         <textarea id="ocProxies" rows="4" style="width:100%;font-family:ui-monospace,monospace;font-size:12px;border:1px solid var(--border2);border-radius:8px;padding:8px;background:var(--surface);color:var(--text)" placeholder="socks5://127.0.0.1:1080&#10;http://user:pass@proxy.example.com:8080"></textarea>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Cline 官方出口代理</div>
-    <div class="section-desc">发往 Cline 官方 API (api.cline.bot) 的请求出口代理。留空则直连或使用系统环境代理。支持 http / https / socks5 / socks5h，支持带用户名密码，如 <span class="mono">http://user:pass@127.0.0.1:7890</span> 或 <span class="mono">socks5://127.0.0.1:1080</span>。</div>
-    <div class="section-body">
-      <div class="form-row">
-        <div class="field" style="flex:1">
-          <label>代理地址 (URL)</label>
-          <input type="text" id="clineProxyInput" style="width:100%;font-family:ui-monospace,monospace;font-size:13px" placeholder="留空使用系统代理/直连，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
-        </div>
-      </div>
-      <div class="form-actions" style="margin-top:14px;display:flex;gap:10px;align-items:center">
-        <button class="btn" id="btnTestClineProxy" onclick="testClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>测试连接</button>
-        <button class="btn btn-primary" onclick="saveClineProxy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存代理配置</button>
-        <span id="clineProxyStatus" style="font-size:13px;margin-left:6px"></span>
       </div>
     </div>
   </div>
